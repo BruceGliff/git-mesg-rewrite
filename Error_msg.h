@@ -9,5 +9,5 @@ char const * EINVALID_FILE = "Cann't open file.";
 #define ERROR(msg)                          \
     {                                       \
         fprintf(stderr, "%s\n", msg);       \
-        return -1;                          \
+        return 0;                           \
     }

@@ -1,2 +1,2 @@
 all:
-	gcc main.c -lz -o git-mesg-rewrite
+	gcc main.c decompress.c compress.c -lz -o git-mesg-rewrite
