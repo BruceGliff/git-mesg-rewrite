@@ -11,3 +11,6 @@ char const * EINVALID_FILE = "Cann't open file.";
         fprintf(stderr, "%s\n", msg);       \
         return 0;                           \
     }
+
+#define SHA_LEN 40
+#define BLOCK 4096

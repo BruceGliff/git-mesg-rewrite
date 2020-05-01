@@ -5,15 +5,20 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include <fcntl.h>
 
 
 #include "Error_msg.h"
+#include "SHAimpl/sha1.h"
 
-struct commit_tree
+typedef struct commit_tree
 {
-    char a; 
-};
+    char parent[SHA_LEN];
+    char current[SHA_LEN];
+    char data[BLOCK];
+    struct commit_tree * next;
+    struct commit_tree * prev;
+} commit_tree;
 
 int isSubstr(char const * where, char const * what);
 // Return FILE * pointer to info file and write path to object
@@ -22,6 +27,11 @@ FILE * getObject(char const * HASH, char * path_to_object, int isFullHash);
 char * parserMessage(char const * mesg);
 // Rewrite message and return new size
 int rewriteMessage(char * allData, char * esgBegin, char * newMesg, int size);
+// Return pointer to HEAD commit
+commit_tree * get_HEAD();
+// Fill fields of node
+void consturct_commit_node(commit_tree * node, char const * commit_hash);
+void construct_path_to_object(char const * commit_hash, char * path_to_objects);
 
 
 // From decompress.c
@@ -39,17 +49,12 @@ int main(int argc, char * argv[])
     if (!strstr(argv[1], "HEAD"))
     {
         // Get object file
-        char editableMSG[4096];
-        memset(editableMSG, 0, 4096);
+        char editableMSG[BLOCK];
+        memset(editableMSG, 0, BLOCK);
         char path_to_object[256];
         FILE * object = getObject(argv[1], path_to_object, 0);
         if (!object)
             ERROR(EINVALID_FILE);
-
-        // decompress commit info 
-        //FILE * editableMSG = fopen("editableMSG.tmp", "wb");
-        //if (!editableMSG)
-        //    ERROR(EINVALID_FILE);
 
         int size = decompress_file(object, editableMSG);
         if (!size)
@@ -62,6 +67,10 @@ int main(int argc, char * argv[])
 
         // Write New msg
         int newSize = rewriteMessage(editableMSG, msgBegin, argv[2], size);
+
+        // Calc new hsum
+        char sha[40];
+        toSHA1(editableMSG, newSize, sha);
         
         // Composemsg
         FILE * newObject = fopen(path_to_object, "wb");
@@ -69,13 +78,53 @@ int main(int argc, char * argv[])
             ERROR(EINVALID_FILE);
 
         compress_data(editableMSG, newSize, newObject);
+
+        fclose(newObject);
     }
     else
     {
         int depth = 0;
         sscanf(argv[1], "HEAD~%d", &depth);
+
+        commit_tree * head = get_HEAD();
+
     }
 
+}
+
+commit_tree * get_HEAD()
+{
+    int fd = open(".git/HEAD", O_RDONLY);
+    if (fd < 0)
+        ERROR(EINVALID_FILE);
+    char HEAD[256];
+    memset(HEAD, 0, 256);
+
+    int size = read(fd, HEAD, 256);
+    close(fd);
+
+    char headHash[256];
+    memset(headHash, 0, 256);
+    char * dir_beg = strstr(HEAD, "refs");
+    if (!dir_beg)
+        ERROR("Cann't parse HEAD file");
+
+    memcpy(headHash, dir_beg, size - (dir_beg - HEAD) - 1);
+
+    memset(HEAD, 0, 256);
+    sprintf(HEAD, ".git/%s", headHash);
+    printf("%s\n", HEAD);
+    fd = open(HEAD, O_RDONLY);
+    if (fd < 0)
+        ERROR(EINVALID_FILE);
+
+    commit_tree * head = (commit_tree *) calloc (1, sizeof(commit_tree));
+    size = read(fd, head->current, SHA_LEN);
+    if (size != SHA_LEN)
+        ERROR(EINVALID_HASH);
+
+    consturct_commit_node(head, head->current);
+    
 }
 
 
@@ -176,3 +225,22 @@ int rewriteMessage(char * allData, char * mesgBegin, char * newMesg, int size)
     return newSize;
 }
 
+void consturct_commit_node(commit_tree * node, char const * commit_hash)
+{
+    char path[256];
+    construct_path_to_object(commit_hash, path);
+    printf("%s", path);
+}
+
+void construct_path_to_object(char const * commit_hash, char * path_to_objects)
+{
+    // parse required hash
+    char prefix[3];
+    prefix[2] = '\0';
+    sscanf(commit_hash, "%2s", prefix);
+
+    // find required object
+    memset(path_to_objects, 0, 256);
+
+    sprintf(path_to_objects, ".git/objects/%s/%s", prefix, commit_hash + 2);
+}
