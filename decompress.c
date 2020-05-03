@@ -6,9 +6,11 @@
 
 #define CHUNK_SIZE 4096
 
-// return size of the written data
-int decompress_file(FILE *src, char * dst)
+// allocated and written data and size in message_size
+char * decompress_file(int src_fd, int * message_size)
 {
+    char * dst = (char *) calloc (CHUNK_SIZE, 1);
+    int overhead = 1;
     int alreadyWritten = 0;
     uint8_t inbuff[CHUNK_SIZE];
     uint8_t outbuff[CHUNK_SIZE];
@@ -18,16 +20,16 @@ int decompress_file(FILE *src, char * dst)
     if (result != Z_OK)
     {
     	fprintf(stderr, "inflateInit(...) failed!\n");
-        return -1;
+        return 0;
     }
 
     do {
-        stream.avail_in = fread(inbuff, 1, CHUNK_SIZE, src);
-        if (ferror(src))
+        stream.avail_in = read(src_fd, inbuff, CHUNK_SIZE);
+        if (stream.avail_in == -1)
         {
-        	fprintf(stderr, "fread(...) failed!\n");
+        	fprintf(stderr, "read(...) failed!\n");
             inflateEnd(&stream);
-            return -1;
+            return 0;
         }
 
         if (stream.avail_in == 0)
@@ -43,17 +45,18 @@ int decompress_file(FILE *src, char * dst)
             {
             	fprintf(stderr, "inflate(...) failed: %d\n", result);
                 inflateEnd(&stream);
-                return -1;
+                return 0;
             }
 
             uint32_t nbytes = CHUNK_SIZE - stream.avail_out;
 
-            // if (fwrite(outbuff, 1, nbytes, dst) != nbytes || ferror(dst))
-            // {
-            // 	fprintf(stderr, "fwrite(...) failed!\n");
-            //     inflateEnd(&stream);
-            //     return -1;
-            // }
+            if (alreadyWritten + nbytes >= CHUNK_SIZE)
+            {
+                char * tmp = (char *) calloc (CHUNK_SIZE * (++overhead), 1);
+                memcpy(tmp, dst, alreadyWritten);
+                free(dst);
+                dst = tmp;
+            }
 
             dst = memcpy(dst + alreadyWritten, outbuff, nbytes);
             alreadyWritten += nbytes;
@@ -62,5 +65,7 @@ int decompress_file(FILE *src, char * dst)
 
     inflateEnd(&stream);
 
-    return alreadyWritten;
+    dst = realloc(dst, alreadyWritten);
+    *message_size = alreadyWritten;
+    return dst;
 }
