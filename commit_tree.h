@@ -23,7 +23,11 @@ commit_tree * get_HEAD();
 int consturct_commit_node(commit_tree ** node, char const * commit_hash);
 // construct commit-tree and return pointer to last node
 commit_tree * construct_commit_tree(commit_tree * head, int depth);
+// construct commit-tree and return pointer to last node
+commit_tree * construct_commit_tree_by_hash(commit_tree * head, char const * HASH);
 //
 int changeChildSHA(commit_tree * current, commit_tree const * parent);
 //
 int writeData(commit_tree * node);
+// Free memory and if flag 1 - delete old files
+int destroyTree(commit_tree * node, int delete_flag);

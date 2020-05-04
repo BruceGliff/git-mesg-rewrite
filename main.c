@@ -14,7 +14,7 @@
 #include "message.h"
 #include "zlib.h"
 
-#define OUT
+int work_with_tree(commit_tree * head, commit_tree * current, char const * mess);
 
 int main(int argc, char * argv[])
 {
@@ -24,76 +24,66 @@ int main(int argc, char * argv[])
     // choose propreate algorithm
     if (!strstr(argv[1], "HEAD"))
     {
-        /*
-        // Get object file
-        char editableMSG[BLOCK];
-        memset(editableMSG, 0, BLOCK);
-        char path_to_object[256];
-        FILE * object = getObject(argv[1], path_to_object, 0);
-        if (!object)
-            ERROR(EINVALID_FILE);
+        char HASH[SHA_LEN+1];
+        getFullHash(argv[1], HASH);
 
-        int size = decompress_file(object, editableMSG);
-        if (!size)
-            ERROR("Cann't decompress");
+        commit_tree * head = get_HEAD();
+        commit_tree * current = construct_commit_tree_by_hash(head, HASH);
 
-        fclose(object); 
-
-        // Parse msg
-        char * msgBegin = parserMessage(editableMSG);
-
-        // Write New msg
-        int newSize = rewriteMessage(editableMSG, msgBegin, argv[2], size);
-
-        // Calc new hsum
-        char sha[40];
-        toSHA1(editableMSG, newSize, sha);
-        
-        // Composemsg
-        FILE * newObject = fopen(path_to_object, "wb");
-        if (!newObject)
-            ERROR(EINVALID_FILE);
-
-        compress_data(editableMSG, newSize, newObject);
-
-        fclose(newObject);*/
+        work_with_tree(head, current, argv[2]);
     }
     else
     {
+        exit(1);
         int depth = 0;
         sscanf(argv[1], "HEAD~%d", &depth);
 
         commit_tree * head = get_HEAD();
         commit_tree * current = construct_commit_tree(head, depth);
 
-
-        current->data = rewriteMessage(current->data, argv[2], &current->data_size);
-        current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
-        toSHA1(current->data, current->data_size, current->new_SHA);
-        
-        while(current->next)
-        {
-            current = current->next;
-            changeChildSHA(current, current->prev);
-            current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
-            toSHA1(current->data, current->data_size, current->new_SHA);
-        }
-        current = head;
-        while (current)
-        {
-            writeData(current);
-            current = current->prev;
-        }
-
-        // WRONG DESTINATON
-        int fd = open(".git/HEAD", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-        if (fd < 0)
-        {
-            perror(0);
-            ERROR(EINVALID_FILE);
-        }
-        write(fd, head->new_SHA, SHA_LEN);
-        close(fd);
+        work_with_tree(head, current, argv[2]);
     }
 
+}
+
+
+int work_with_tree(commit_tree * head, commit_tree * current, char const * mess)
+{
+    current->data = rewriteMessage(current->data, mess, &current->data_size);
+    current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
+    toSHA1(current->data, current->data_size, current->new_SHA);
+
+    if(strcmp(current->current_SHA, current->new_SHA) == 0)
+    {
+        destroyTree(head, 0);
+        ERROR("Nothing to change. Exit.");
+    }
+    while(current->next)
+    {
+        current = current->next;
+        changeChildSHA(current, current->prev);
+        current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
+        toSHA1(current->data, current->data_size, current->new_SHA);
+    }
+    current = head;
+    while (current)
+    {
+        writeData(current);
+        current = current->prev;
+    }
+
+    char HEAD_file[256];
+    get_ref_file(HEAD_file);
+    int fd = open(HEAD_file, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0)
+    {
+        perror(0);
+        ERROR(EINVALID_FILE);
+    }
+    write(fd, head->new_SHA, SHA_LEN);
+    close(fd);
+
+    destroyTree(head, 1);
+
+    return 0;
 }

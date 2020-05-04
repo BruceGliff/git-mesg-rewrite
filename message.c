@@ -26,11 +26,12 @@ int isSubstr(char const * where, char const * what)
 
 char * parserMessage(char const * mesg)
 {
-    char const * gpgsig = "-----END PGP SIGNATURE-----";
+    char const gpgsig[] = "-----END PGP SIGNATURE-----";
     // +20 for skip '\0'
     char * point_to_gpgsig = strstr(mesg + 20, gpgsig);
+
     if (point_to_gpgsig)
-        point_to_gpgsig += 31; // skip \n\n
+        point_to_gpgsig += sizeof(gpgsig) + 3; // skip \n\n
     else
         point_to_gpgsig = strstr(mesg + 20, "\n\n") + 2;
 
@@ -67,35 +68,27 @@ char * rewriteMessage(char * old_data, char const * new_message, int * size)
     return new_data;
 }
 
-// not neccessary yet
-/*FILE * getObjectsFile(char const * HASH, char * path_to_objects, int isFullHash)
+
+int getFullHash(char const * HASH, char * fullHASH)
 {
     if (strlen(HASH) < 3 || strlen(HASH) > 40)
             ERROR(EINVALID_HASH)
-
-    // parse required hash
-    char prefix[3];
-    prefix[2] = '\0';
-    sscanf(HASH, "%2s", prefix);
+    memset(fullHASH, 0, SHA_LEN+1);
 
     // find required object
+    char const static_path[] = ".git/objects/";
+    int const size = sizeof(static_path) - 1;
+    char path_to_objects[256];
     memset(path_to_objects, 0, 256);
-
-
-    if (isFullHash)
-    {
-        printf("ASD");
-        sprintf(path_to_objects, ".git/objects/%s/%s", prefix, HASH + 2);
-        return fopen(path_to_objects, "rb");
-    }
-
-    sprintf(path_to_objects, ".git/objects/%s", prefix);
+    memcpy(path_to_objects, static_path, size);
+    path_to_objects[size] = '/';
+    memcpy(path_to_objects + size + 1, HASH, 2);
 
     DIR * dirfd = opendir(path_to_objects);
     if (!dirfd)
         ERROR(EINVALID_FILE);
 
-    struct dirent * dir = (struct dirent *) calloc(1, sizeof(struct dirent));
+    struct dirent * dir;
     while( (dir = readdir(dirfd)) != NULL)
     {
         // if hit
@@ -105,16 +98,14 @@ char * rewriteMessage(char * old_data, char const * new_message, int * size)
 
     if (!dir)
         ERROR(EINVALID_HASH)
-    
-    // create correct path
-    memset(path_to_objects, 0, 256);
-    sprintf(path_to_objects, ".git/objects/%2s/%s", prefix, dir->d_name);
+
+    memcpy(fullHASH, HASH, 2);
+    memcpy(fullHASH+2, dir->d_name, 38);
 
     closedir(dirfd);
 
-    // now we get correct zip object
-    return fopen(path_to_objects, "rb");
-}*/
+    return 1;
+}
 
 
 char * getMessage(char const * path_to_object, int * message_size)
@@ -128,12 +119,12 @@ char * getMessage(char const * path_to_object, int * message_size)
     char * decpypted_message = (char *) calloc (file_stat.st_size, 1);
     if (!decpypted_message)
         ERROR(EINVALID_ALLOC);
-    
+
     int decpypted_message_size = read(fd, decpypted_message, file_stat.st_size);
     close(fd);
 
     char * message = decompress_data(decpypted_message, decpypted_message_size, message_size);
-
+    free(decpypted_message);
     if (!message)
         ERROR("Cann't get the message");
 
@@ -157,12 +148,17 @@ void construct_path_to_object(char const * commit_hash, char * path_to_objects)
     // parse required hash
     char prefix[3];
     prefix[2] = '\0';
-    sscanf(commit_hash, "%2s", prefix);
+    memcpy(prefix, commit_hash, 2);
 
     // find required object
     memset(path_to_objects, 0, 256);
 
-    sprintf(path_to_objects, ".git/objects/%s/%s", prefix, commit_hash + 2);
+    char static_path[] = ".git/objects/";
+    int const size = sizeof(static_path) - 1;
+    memcpy(path_to_objects, static_path, size);
+    memcpy(path_to_objects + size, commit_hash, 2);
+    path_to_objects[size + 2] = '/';
+    memcpy(path_to_objects + size + 3, commit_hash + 2, 38);
 }
 
 int change_SHA(char * where, char const * new_SHA)
@@ -177,3 +173,25 @@ int change_SHA(char * where, char const * new_SHA)
 
     return 1;
 }   
+
+int get_ref_file(char * HEAD)
+{
+    int fd = open(".git/HEAD", O_RDONLY);
+    if (fd < 0)
+        ERROR(EINVALID_FILE);
+    memset(HEAD, 0, 256);
+
+    int size = read(fd, HEAD, 256);
+    close(fd);
+
+    char headHash[256];
+    memset(headHash, 0, 256);
+    char * dir_beg = strstr(HEAD, "refs");
+    if (!dir_beg)
+        ERROR("Cann't parse HEAD file");
+
+    memcpy(headHash, dir_beg, size - (dir_beg - HEAD) - 1);
+
+    memset(HEAD, 0, 256);
+    sprintf(HEAD, ".git/%s", headHash);
+}
