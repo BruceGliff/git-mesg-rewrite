@@ -34,7 +34,6 @@ int main(int argc, char * argv[])
     }
     else
     {
-        exit(1);
         int depth = 0;
         sscanf(argv[1], "HEAD~%d", &depth);
 
