@@ -19,7 +19,7 @@ int consturct_commit_node(commit_tree ** node, char const * commit_hash)
 
     char path[256];
     construct_path_to_object(commit_hash, path);
-    memcpy((*node)->current, commit_hash, SHA_LEN);
+    memcpy((*node)->current_SHA, commit_hash, SHA_LEN);
 
     (*node)->data = getMessage(path, &(*node)->data_size);
     if (!(*node)->data)
@@ -29,19 +29,6 @@ int consturct_commit_node(commit_tree ** node, char const * commit_hash)
     }
 
     return getParentHash((*node)->data, (*node)->parent);
-}
-
-void construct_path_to_object(char const * commit_hash, char * path_to_objects)
-{
-    // parse required hash
-    char prefix[3];
-    prefix[2] = '\0';
-    sscanf(commit_hash, "%2s", prefix);
-
-    // find required object
-    memset(path_to_objects, 0, 256);
-
-    sprintf(path_to_objects, ".git/objects/%s/%s", prefix, commit_hash + 2);
 }
 
 commit_tree * get_HEAD()
@@ -82,7 +69,7 @@ commit_tree * get_HEAD()
     return head;
 }
 
-int construct_commit_tree(commit_tree * head, int depth)
+commit_tree * construct_commit_tree(commit_tree * head, int depth)
 {
     for (int i = 0; i != depth; ++i)
     {   
@@ -93,5 +80,29 @@ int construct_commit_tree(commit_tree * head, int depth)
         head = head->prev;
     }
 
-    return 1;
+    return head;
+}
+
+int changeChildSHA(commit_tree * current, commit_tree const * parent)
+{
+    change_SHA(current->data, parent->new_SHA);
+    memcpy(current->parent, parent->new_SHA, SHA_LEN);   
+}
+
+int writeData(commit_tree * node)
+{
+    char dirPath[256] = ".git/objects/";
+    memcpy(dirPath + 13, node->new_SHA, 2);
+    int dir = mkdir(dirPath, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    
+    construct_path_to_object(node->new_SHA, dirPath);
+
+    int fd = open(dirPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0)
+    {
+        perror(0);
+        ERROR(EINVALID_FILE);
+    }
+    write(fd, node->encrypted_data, node->encrypted_data_size);
+    close(fd);
 }

@@ -7,10 +7,12 @@
 typedef struct commit_tree
 {
     char parent[SHA_LEN+1];
-    char current[SHA_LEN+1];
-    char new_current[SHA_LEN+1];
+    char current_SHA[SHA_LEN+1];
+    char new_SHA[SHA_LEN+1];
     char * data;
+    char * encrypted_data;
     int data_size;
+    int encrypted_data_size;
     struct commit_tree * next;
     struct commit_tree * prev;
 } commit_tree;
@@ -19,7 +21,9 @@ typedef struct commit_tree
 commit_tree * get_HEAD();
 // Fill fields of node. Return 0 if it is First commit(no parent)
 int consturct_commit_node(commit_tree ** node, char const * commit_hash);
-// Parse hash to object's path
-void construct_path_to_object(char const * commit_hash, OUT char * path_to_objects);
-// construct commit-tree
-int construct_commit_tree(commit_tree * head, int depth);
+// construct commit-tree and return pointer to last node
+commit_tree * construct_commit_tree(commit_tree * head, int depth);
+//
+int changeChildSHA(commit_tree * current, commit_tree const * parent);
+//
+int writeData(commit_tree * node);

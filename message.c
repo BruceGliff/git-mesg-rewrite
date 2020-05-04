@@ -9,9 +9,7 @@
 
 #include "message.h"
 #include "Error_msg.h"
-
-// return size of the allocated and written data 
-char * decompress_file(int src_fd, int * message_size);
+#include "zlib.h"
 
 
 int isSubstr(char const * where, char const * what)
@@ -124,10 +122,17 @@ char * getMessage(char const * path_to_object, int * message_size)
     int fd = open(path_to_object, O_RDONLY);
     if (fd < 0)
         ERROR(EINVALID_FILE);
+    struct stat file_stat;
+    fstat(fd, &file_stat);
 
-    char * message = decompress_file(fd, message_size);
-
+    char * decpypted_message = (char *) calloc (file_stat.st_size, 1);
+    if (!decpypted_message)
+        ERROR(EINVALID_ALLOC);
+    
+    int decpypted_message_size = read(fd, decpypted_message, file_stat.st_size);
     close(fd);
+
+    char * message = decompress_data(decpypted_message, decpypted_message_size, message_size);
 
     if (!message)
         ERROR("Cann't get the message");
@@ -146,3 +151,29 @@ int getParentHash(char const * message, char * place_to_write)
 
     return 1;
 }
+
+void construct_path_to_object(char const * commit_hash, char * path_to_objects)
+{
+    // parse required hash
+    char prefix[3];
+    prefix[2] = '\0';
+    sscanf(commit_hash, "%2s", prefix);
+
+    // find required object
+    memset(path_to_objects, 0, 256);
+
+    sprintf(path_to_objects, ".git/objects/%s/%s", prefix, commit_hash + 2);
+}
+
+int change_SHA(char * where, char const * new_SHA)
+{
+    char const static_parent_str[] = "parent";
+    char * toSHA_pointer = strstr(where + 20, static_parent_str);
+    if (!toSHA_pointer)
+        ERROR("Cann't parse message and fine parent");
+    toSHA_pointer += sizeof(static_parent_str);
+
+    memcpy(toSHA_pointer, new_SHA, SHA_LEN);
+
+    return 1;
+}   

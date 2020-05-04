@@ -12,6 +12,7 @@
 #include "SHAimpl/sha1.h"
 #include "commit_tree.h"
 #include "message.h"
+#include "zlib.h"
 
 #define OUT
 
@@ -63,18 +64,36 @@ int main(int argc, char * argv[])
         sscanf(argv[1], "HEAD~%d", &depth);
 
         commit_tree * head = get_HEAD();
-        construct_commit_tree(head, depth);
+        commit_tree * current = construct_commit_tree(head, depth);
 
-        commit_tree * required = NULL;
-        while (head)
+
+        current->data = rewriteMessage(current->data, argv[2], &current->data_size);
+        current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
+        toSHA1(current->data, current->data_size, current->new_SHA);
+        
+        while(current->next)
         {
-            required = head;
-            head = head->prev;
+            current = current->next;
+            changeChildSHA(current, current->prev);
+            current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
+            toSHA1(current->data, current->data_size, current->new_SHA);
         }
-        required->data = rewriteMessage(required->data, argv[2], &required->data_size);
+        current = head;
+        while (current)
+        {
+            writeData(current);
+            current = current->prev;
+        }
 
-        toSHA1(required->data, required->data_size, required->new_current);
-
+        // WRONG DESTINATON
+        int fd = open(".git/HEAD", O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if (fd < 0)
+        {
+            perror(0);
+            ERROR(EINVALID_FILE);
+        }
+        write(fd, head->new_SHA, SHA_LEN);
+        close(fd);
     }
 
 }
