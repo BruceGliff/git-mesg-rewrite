@@ -21,6 +21,12 @@ int main(int argc, char * argv[])
     if (argc < 3)
         ERROR(EINVALID_ARG)
 
+int messlen = strlen(argv[2]);
+char message[messlen+2];
+memcpy(message, argv[2], messlen);
+message[messlen] = '\n';
+message[messlen+1] = 0;
+
     // choose propreate algorithm
     if (!strstr(argv[1], "HEAD"))
     {
@@ -30,7 +36,7 @@ int main(int argc, char * argv[])
         commit_tree * head = get_HEAD();
         commit_tree * current = construct_commit_tree_by_hash(head, HASH);
 
-        work_with_tree(head, current, argv[2]);
+        work_with_tree(head, current, message);
     }
     else
     {
@@ -40,7 +46,7 @@ int main(int argc, char * argv[])
         commit_tree * head = get_HEAD();
         commit_tree * current = construct_commit_tree(head, depth);
 
-        work_with_tree(head, current, argv[2]);
+        work_with_tree(head, current, message);
     }
 
 }
@@ -48,6 +54,7 @@ int main(int argc, char * argv[])
 
 int work_with_tree(commit_tree * head, commit_tree * current, char const * mess)
 {
+
     current->data = rewriteMessage(current->data, mess, &current->data_size);
     current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
     toSHA1(current->data, current->data_size, current->new_SHA);
@@ -64,6 +71,7 @@ int work_with_tree(commit_tree * head, commit_tree * current, char const * mess)
         current->encrypted_data = compress_data(current->data, current->data_size, &current->encrypted_data_size);
         toSHA1(current->data, current->data_size, current->new_SHA);
     }
+
     current = head;
     while (current)
     {

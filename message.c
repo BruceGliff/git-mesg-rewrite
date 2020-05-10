@@ -42,8 +42,10 @@ char * rewriteMessage(char * old_data, char const * new_message, int * size)
 {
     int body_with_msg_size = 0;
     sscanf(old_data, "commit %d", &body_with_msg_size);
+    int const old_prefix_size = strlen(old_data);
 
     char const * message_begin = parserMessage(old_data);
+
     int  const   message_size = *size - (message_begin - old_data);
 
     int  const   body_size =  body_with_msg_size - message_size;
@@ -55,11 +57,12 @@ char * rewriteMessage(char * old_data, char const * new_message, int * size)
     char prefix[256];
     memset(prefix, 0, 256);
     int const prefix_size = sprintf(prefix, "commit %d", new_body_with_msg_size);
+
     int const new_data_size = prefix_size + new_body_with_msg_size + 1;
 
     char * new_data = (char *) calloc (1, new_data_size);
     memcpy(new_data, prefix, prefix_size);
-    memcpy(new_data + prefix_size + 1, old_data + prefix_size + 1, body_size);
+    memcpy(new_data + prefix_size + 1, old_data + old_prefix_size + 1, body_size);
     memcpy(new_data + prefix_size + 1 + body_size, new_message, new_message_size);
 
     *size = new_data_size;
